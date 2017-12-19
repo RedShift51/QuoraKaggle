@@ -188,9 +188,9 @@ for i in range(2900):
     batch = train_numbers[i*100:(i+1)*100]
     #np.random.randint(low=0,high=len(train_numbers),size=100)]
     X1 = np.load(open('/home/ubuntu/alexey-interview/batches/'+str(i)+'1', \
-                 'w'))
+                 'r'))
     X2 = np.load(open('/home/ubuntu/alexey-interview/batches/'+str(i)+'2', \
-                 'w'))
+                 'r'))
     """
     [np.expand_dims(question2mat(storage_question1[str(j)], \
                         len_actual=10000),0)
