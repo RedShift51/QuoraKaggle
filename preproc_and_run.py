@@ -28,12 +28,12 @@ train_numbers = np.concatenate([aux_numbers_1,aux_numbers_0[:len(aux_numbers_1)]
 np.random.shuffle(train_numbers)
 
 """ Preprocessing """
-x1 = np.array([len(data['question1'][i].split(' ')) for i in range(len(data))])
-x2 = np.array([len(data['question2'][i].split(' ')) for i in range(len(data)) \
-               if type(data['question2'][i]) is str])
+#x1 = np.array([len(data['question1'][i].split(' ')) for i in range(len(data))])
+#x2 = np.array([len(data['question2'][i].split(' ')) for i in range(len(data)) \
+#               if type(data['question2'][i]) is str])
 
-plt.hist(x1, bins = 50)
-plt.hist(x2, bins = 50)
+#plt.hist(x1, bins = 50)
+#plt.hist(x2, bins = 50)
 
 """ From graphs we know that optimal len of input is 30 words """
 """ Let's transform our questions to vectors """
@@ -108,7 +108,7 @@ def train_append(s):
             train.append((s[j0], s[j0+1]))
     return train
     
-for i in range(len(data))[:10000]:
+for i in range(len(data))[:25000]:
     s = storage_question1[str(i)]
     train = train_append(s)
     if len(train) > 0:
@@ -129,15 +129,15 @@ for i in range(len(data))[:10000]:
             X = np.concatenate([onehot(t0) for t0,t in train],axis=1).T
             Y = np.concatenate([onehot(t) for t0,t in train],axis=1).T
             proc2vec.fit(X,Y,epochs=3)
-    print(i, len(data))
+    print(i, len(data), 'embeddings training')
 
-proc2vec.save('/home/alex/kaggle/quora/proc2vec1.h5')
-
+#proc2vec.save('/home/alex/kaggle/quora/proc2vec1.h5')
+#proc2vec = keras.models.load_model('/home/alex/kaggle/quora/proc2vec1.h5')
 """ Let's train model """
 
 low_dim_model = Sequential()
 low_dim_model.add(Dense(units = 300, input_shape = (10000,),\
-              weights = proc2vec.layers[1].get_weights(), activation = 'relu'))
+              weights = proc2vec.layers[0].get_weights(), activation = 'relu'))
     
 def question2mat(s, len_actual = 1500):
     start_embed = [low_dim_model.predict(onehot(actual_words[i], \
@@ -160,6 +160,20 @@ def question2mat(s, len_actual = 1500):
 #    for i in list(dict1):
 #        if 
 
+for i in range(2900):
+    batch = train_numbers[i*100:(i+1)*100]
+    X1 = np.concatenate([np.expand_dims(question2mat(storage_question1[str(j)], \
+                        len_actual=10000),axis=0)
+                  for j in batch], axis=0)
+    X2 = np.concatenate([np.expand_dims(question2mat(storage_question2[str(i)], \
+                        len_actual=10000),0)
+                         for i in batch], axis=0)
+    np.save(open('/home/ubuntu/alexey-interview/batches/'+str(i)+'1', \
+                 'w'), X1)
+    np.save(open('/home/ubuntu/alexey-interview/batches/'+str(i)+'2', \
+                 'w'), X2)
+    print('We have', i, 'of', 2900, 'embeddings')    
+    
 """
 We have two parallel convolution blocks at the entry, then they
 are flattened and concated and then we have block of dense layers
@@ -169,19 +183,39 @@ end_model.compile(optimizer = opt, loss = 'binary_crossentropy', \
                           metrics = ['accuracy'])
 end_model.summary()
 
-for i in range(3000):
+history = []
+for i in range(2900):
     batch = train_numbers[i*100:(i+1)*100]
     #np.random.randint(low=0,high=len(train_numbers),size=100)]
-    X1 = [np.expand_dims(question2mat(storage_question1[str(j)], \
+    X1 = np.load(open('/home/ubuntu/alexey-interview/batches/'+str(i)+'1', \
+                 'w'))
+    X2 = np.load(open('/home/ubuntu/alexey-interview/batches/'+str(i)+'2', \
+                 'w'))
+    """
+    [np.expand_dims(question2mat(storage_question1[str(j)], \
                         len_actual=10000),0)
                   for j in batch]
+    
     X2 = [np.expand_dims(question2mat(storage_question2[str(i)], \
                         len_actual=10000),0)
                          for i in batch]
+    """
     
-    X1 = np.concatenate(X1, axis = 0)
-    X2 = np.concatenate(X2, axis = 0)
+    #X1 = np.concatenate(X1, axis = 0)
+    #X2 = np.concatenate(X2, axis = 0)
     Y = np.array(data['is_duplicate'][batch])  
-    end_model.fit([np.expand_dims(X1,3), np.expand_dims(X2,3)], Y, epochs = 5, \
-                   validation_split = 0.1)
-    print(i,3000)
+    history.append(end_model.fit([np.expand_dims(X1,3), np.expand_dims(X2,3)], Y, \
+                                  epochs = 5, batch_size = 50, validation_split = 0.2))
+    #if (i+1) % 150 == 0:
+    #    end_model.save('/home/alex/kaggle/quora/end_model1.h5')        
+    print('Final model is training', i, 3000)
+
+val_acc = []
+val_loss = []
+for i in range(history):
+    val_acc += history[i].history['val_acc']
+    val_loss += history[i].history['val_loss']
+
+
+import json
+json.dump({'acc':val_acc, 'loss':val_loss}, open('results_model.json','w'))
